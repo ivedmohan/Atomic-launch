@@ -1,0 +1,48 @@
+STEALTH LAUNCH — PROPRIETARY LICENSE
+
+Copyright (c) 2026 Ved Mohan. All Rights Reserved.
+
+NOTICE: This is proprietary software. The source code is made available
+for viewing purposes only, particularly for hackathon judging and 
+educational review.
+
+TERMS AND CONDITIONS
+
+1. VIEWING RIGHTS
+   You may view and read the source code in this repository for:
+   - Educational purposes
+   - Hackathon judging and evaluation
+   - Security auditing (with prior written permission)
+
+2. RESTRICTIONS
+   You may NOT:
+   - Copy, reproduce, or redistribute this software
+   - Create derivative works based on this software
+   - Use this software, or any part of it, in any commercial product
+   - Use this software, or any part of it, in any production environment
+   - Sublicense, sell, or transfer this software to any third party
+   - Remove or alter any proprietary notices or labels
+
+3. NO OPEN SOURCE
+   This software is NOT open source. The availability of source code
+   does not grant you any rights beyond those explicitly stated above.
+
+4. NO WARRANTY
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED. THE AUTHOR ASSUMES NO LIABILITY FOR ANY DAMAGES
+   ARISING FROM THE USE OR MISUSE OF THIS SOFTWARE.
+
+5. COMMERCIAL LICENSING
+   For commercial licensing inquiries, contact the author.
+
+6. TERMINATION
+   Any violation of these terms immediately terminates your rights
+   under this license.
+
+---
+
+This license is inspired by the Business Source License (BSL) concept
+but with stricter "source available" terms. The code is visible but
+not usable without explicit permission.
+
+For questions: Contact the repository owner.

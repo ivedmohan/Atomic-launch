@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stealth Launch 🚀
+
+**The first privacy-preserving token launchpad for Pump.fun on Solana.**
+
+Launch your meme coin without getting doxxed. Stealth Launch breaks on-chain links between your wallet and your token using ZK proofs and Bulletproofs.
+
+## Features
+
+- 🔒 **Privacy Cash Integration** — Shield SOL with ZK proofs, withdraw to burners with zero on-chain link
+- 🛡️ **ShadowWire Integration** — Hide transaction amounts using Bulletproofs
+- ⚡ **Atomic Jito Bundles** — Launch token + snipe in the same block
+- 🎲 **Stealth Distribution** — Randomized timing (30s-5min) and amounts (±15%)
+- 📊 **Privacy Score** — See how unlinkable your launch is
+- 💼 **50 Burner Wallets** — Maximum distribution for natural-looking buys
+
+## How It Works
+
+```
+Your Wallet → Shield (ZK) → Privacy Pool → Stealth Withdraw → Burner Wallets → Atomic Launch
+                                    ↑
+                              UNLINKABLE
+```
+
+1. **Generate** burner wallets (up to 50)
+2. **Shield** your SOL into Privacy Cash or ShadowWire pool
+3. **Distribute** privately to burners with randomized timing
+4. **Launch** token + snipe atomically via Jito bundle
+5. **Stay anonymous** — no on-chain connection to you
+
+## Tech Stack
+
+- **Next.js 16** — React 19 with App Router
+- **Solana Web3.js** — Blockchain interactions
+- **Jito Bundles** — MEV-protected atomic transactions
+- **Privacy Cash SDK** — ZK proof shielding
+- **ShadowWire SDK** — Bulletproof private transfers
+- **Zustand** — State management
+- **TailwindCSS** — Styling
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+# Network mode: 'mainnet' | 'devnet' | 'mock'
+NEXT_PUBLIC_NETWORK_MODE=mainnet
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# RPC URLs
+NEXT_PUBLIC_RPC_URL=https://api.mainnet-beta.solana.com
+RPC_URL=your-private-rpc-url
 
-## Learn More
+# Jito
+JITO_BLOCK_ENGINE_URL=https://mainnet.block-engine.jito.wtf
 
-To learn more about Next.js, take a look at the following resources:
+# Platform Fee Wallet
+PLATFORM_FEE_WALLET=your-wallet-address
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Privacy Providers
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Provider | Method | Privacy Level | Use Case |
+|----------|--------|---------------|----------|
+| **Privacy Cash** | ZK Merkle Tree | 🔥 High | Full unlinking |
+| **ShadowWire** | Bulletproofs | ⚡ Medium | Hidden amounts |
 
-## Deploy on Vercel
+## Hackathon Submission
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Built for **Solana Privacy Hack 2026**
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 🏆 Open Track ($18k)
+- ⭐ Privacy Cash Bounty ($15k)
+- ⭐ ShadowWire Bounty ($15k)
+- 🚀 Helius Bounty ($5k)
+
+## License
+
+**⚠️ Source Available — NOT Open Source**
+
+This software is proprietary. You may view the source code for educational purposes only.
+
+- ❌ No commercial use
+- ❌ No copying or redistribution
+- ❌ No derivative works
+- ❌ No use in production
+
+See [LICENSE](./LICENSE) for details.
+
+---
+
+Built with ❤️ for the Solana Privacy Hack 2026
