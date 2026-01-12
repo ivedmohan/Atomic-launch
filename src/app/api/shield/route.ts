@@ -9,10 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Keypair } from '@solana/web3.js';
 
 const RPC_URL = process.env.RPC_URL || 'https://api.mainnet-beta.solana.com';
+const IS_DEVNET = RPC_URL.includes('devnet');
 
 interface ShieldRequest {
     method: 'privacy-cash' | 'shadowwire';
-    secretKey: number[];
+    secretKey?: number[];
     lamports: number;
 }
 
@@ -21,9 +22,32 @@ export async function POST(request: NextRequest) {
         const body: ShieldRequest = await request.json();
         const { method, secretKey, lamports } = body;
 
-        if (!secretKey || !lamports || !method) {
+        if (!method || !lamports) {
             return NextResponse.json(
-                { success: false, error: 'Missing required fields' },
+                { success: false, error: 'Missing method or lamports' },
+                { status: 400 }
+            );
+        }
+
+        // On devnet, return mock success (SDKs only work on mainnet)
+        if (IS_DEVNET) {
+            console.log(`[DEVNET MOCK] Shielding ${lamports / 1e9} SOL via ${method}`);
+
+            // Simulate processing delay
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            return NextResponse.json({
+                success: true,
+                txSignature: 'DEVNET_MOCK_' + Date.now(),
+                method,
+                note: 'Devnet mock - real shielding only works on mainnet',
+            });
+        }
+
+        // On mainnet, require secret key for real operations
+        if (!secretKey) {
+            return NextResponse.json(
+                { success: false, error: 'Secret key required for mainnet shielding' },
                 { status: 400 }
             );
         }
