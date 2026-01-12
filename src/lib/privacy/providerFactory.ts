@@ -1,31 +1,11 @@
 /**
  * Privacy Provider Factory
- * Creates the appropriate privacy provider based on user selection
+ * Display helpers only - no SDK imports to avoid WASM issues
+ * 
+ * For actual SDK usage, use the usePrivacy() hook
  */
 
-import { PrivacyProvider, PrivacyMethod, PrivacyConfig } from './types';
-import { PrivacyCashProvider } from './privacyCash';
-import { ShadowWireProvider } from './shadowWire';
-
-/**
- * Create a privacy provider based on the selected method
- */
-export function createPrivacyProvider(
-    method: PrivacyMethod,
-    rpcUrl: string
-): PrivacyProvider | null {
-    switch (method) {
-        case 'privacy-cash':
-            return new PrivacyCashProvider(rpcUrl);
-
-        case 'shadowwire':
-            return new ShadowWireProvider('mainnet-beta');
-
-        case 'none':
-        default:
-            return null;
-    }
-}
+import { PrivacyMethod } from './types';
 
 /**
  * Get provider name for display

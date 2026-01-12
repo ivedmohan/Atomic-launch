@@ -1,10 +1,11 @@
 /**
  * Privacy Cash SDK Wrapper
  * Provides shielded SOL transfers using ZK proofs
+ * 
+ * NOTE: Uses dynamic import due to WASM dependencies that don't work with SSR
  */
 
 import { Keypair } from '@solana/web3.js';
-import { PrivacyCash } from 'privacycash';
 import {
     PrivacyProvider,
     PrivacyBalance,
@@ -12,10 +13,13 @@ import {
     WithdrawResult
 } from './types';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PrivacyCashClient = any;
+
 export class PrivacyCashProvider implements PrivacyProvider {
     readonly name = 'privacy-cash' as const;
 
-    private client: PrivacyCash | null = null;
+    private client: PrivacyCashClient | null = null;
     private rpcUrl: string;
     private _isReady = false;
 
@@ -26,6 +30,9 @@ export class PrivacyCashProvider implements PrivacyProvider {
     async initialize(secretKey: Uint8Array): Promise<void> {
         try {
             const keypair = Keypair.fromSecretKey(secretKey);
+
+            // Dynamic import to avoid WASM loading during SSR
+            const { PrivacyCash } = await import('privacycash');
 
             this.client = new PrivacyCash({
                 RPC_url: this.rpcUrl,

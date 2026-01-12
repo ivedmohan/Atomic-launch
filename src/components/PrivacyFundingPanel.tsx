@@ -1,17 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Keypair } from '@solana/web3.js';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import {
-    PrivacyMethod,
-    PrivacyProvider,
-    createPrivacyProvider,
-    getProviderDisplayName,
-} from '@/lib/privacy';
-import { getConfig } from '@/lib/config';
+import { PrivacyMethod, getProviderDisplayName } from '@/lib/privacy';
 import { Shield, Loader2, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 
 interface PrivacyFundingPanelProps {
@@ -29,29 +22,13 @@ export function PrivacyFundingPanel({
     onShielded,
     disabled
 }: PrivacyFundingPanelProps) {
-    const { publicKey, signTransaction } = useWallet();
+    const { publicKey } = useWallet();
     const [status, setStatus] = useState<ShieldingStatus>('idle');
     const [shieldedBalance, setShieldedBalance] = useState(0);
     const [error, setError] = useState<string | null>(null);
-    const [provider, setProvider] = useState<PrivacyProvider | null>(null);
-
-    const config = getConfig();
-
-    // Initialize provider when method changes
-    useEffect(() => {
-        if (privacyMethod === 'none') {
-            setProvider(null);
-            setStatus('shielded'); // Skip shielding for no privacy
-            return;
-        }
-
-        const p = createPrivacyProvider(privacyMethod, config.rpcUrl);
-        setProvider(p);
-        setStatus('idle');
-    }, [privacyMethod, config.rpcUrl]);
 
     const handleShield = async () => {
-        if (!provider || !publicKey) {
+        if (!publicKey) {
             setError('Wallet not connected');
             return;
         }
@@ -60,12 +37,21 @@ export function PrivacyFundingPanel({
         setError(null);
 
         try {
-            // For demonstration, we need wallet secret key which we don't have access to
-            // In real implementation, this would use wallet adapter signing
-            // For now, show the flow
-
             const lamports = Math.floor(totalAmount * 1e9);
-            const result = await provider.shield(lamports);
+
+            // Call server-side API that has access to the SDK
+            const response = await fetch('/api/shield', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    method: privacyMethod,
+                    lamports,
+                    // Note: In production, this would use proper wallet signing
+                    // For demo, we show the flow
+                }),
+            });
+
+            const result = await response.json();
 
             if (result.success) {
                 setShieldedBalance(totalAmount);
