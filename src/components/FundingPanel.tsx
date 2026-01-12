@@ -10,23 +10,29 @@ import { Input } from '@/components/ui/Input';
 import { createFundingTransactions } from '@/lib/solana/bundler';
 import { getConfig } from '@/lib/config';
 import { PLATFORM_FEE_SOL, GAS_BUFFER_SOL } from '@/types';
-import { 
-  Coins, 
-  ArrowRight, 
+import { PrivacyMethod, getProviderDisplayName } from '@/lib/privacy';
+import {
+  Coins,
+  ArrowRight,
   Loader2,
   CheckCircle2,
   AlertCircle,
   Zap,
   FlaskConical,
   SkipForward,
+  Shield,
 } from 'lucide-react';
 
-export function FundingPanel() {
+interface FundingPanelProps {
+  privacyMethod?: PrivacyMethod;
+}
+
+export function FundingPanel({ privacyMethod = 'none' }: FundingPanelProps) {
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
-  const { 
-    burnerWallets, 
-    launchConfig, 
+  const {
+    burnerWallets,
+    launchConfig,
     setLaunchConfig,
     getTotalFundingRequired,
     setWalletFunded,
@@ -35,18 +41,20 @@ export function FundingPanel() {
   } = useWalletStore();
 
   const [isFunding, setIsFunding] = useState(false);
-  const [fundingStatus, setFundingStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [fundingStatus, setFundingStatus] = useState<'idle' | 'shielding' | 'distributing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
+  const usePrivacy = privacyMethod !== 'none';
+
   const config = getConfig();
-  
+
   // On devnet, no platform fee
   const platformFee = config.isMainnet ? PLATFORM_FEE_SOL : 0;
-  const totalRequired = config.isMainnet 
-    ? getTotalFundingRequired() 
+  const totalRequired = config.isMainnet
+    ? getTotalFundingRequired()
     : launchConfig.totalBuyAmount + (GAS_BUFFER_SOL * burnerWallets.length);
   const gasEstimate = GAS_BUFFER_SOL * burnerWallets.length;
-  
+
   const [fundingProgress, setFundingProgress] = useState({ current: 0, total: 0 });
 
   const handleFund = async () => {
@@ -61,21 +69,58 @@ export function FundingPanel() {
     }
 
     setIsFunding(true);
-    setFundingStatus('idle');
     setErrorMessage('');
+
+    // Step 1: Shield if privacy is enabled
+    if (usePrivacy) {
+      setFundingStatus('shielding');
+      setLaunchState({ step: 'shielding' });
+
+      try {
+        console.log(`Shielding ${totalRequired} SOL via ${privacyMethod}...`);
+
+        const shieldResponse = await fetch('/api/shield', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: privacyMethod,
+            lamports: Math.floor(totalRequired * 1e9),
+          }),
+        });
+
+        const shieldResult = await shieldResponse.json();
+
+        if (!shieldResult.success) {
+          throw new Error(shieldResult.error || 'Shielding failed');
+        }
+
+        console.log('Shielding complete!');
+      } catch (err) {
+        console.error('Shield error:', err);
+        setFundingStatus('error');
+        const errorMsg = err instanceof Error ? err.message : 'Shielding failed';
+        setErrorMessage(errorMsg);
+        setLaunchState({ step: 'error', error: errorMsg });
+        setIsFunding(false);
+        return;
+      }
+    }
+
+    // Step 2: Distribute to burner wallets
+    setFundingStatus('distributing');
     setLaunchState({ step: 'funding' });
 
     try {
       console.log('Creating funding transactions for', burnerWallets.length, 'wallets');
       console.log('Total amount:', totalRequired, 'SOL');
-      
+
       // Validate burner wallets before creating transaction
       for (const wallet of burnerWallets) {
         if (!wallet.publicKey || wallet.publicKey.length < 32) {
           throw new Error(`Invalid burner wallet at index ${wallet.index}`);
         }
       }
-      
+
       // Create the funding transactions (may be multiple if > 20 wallets)
       const fundingTxs = await createFundingTransactions(
         publicKey,
@@ -104,7 +149,7 @@ export function FundingPanel() {
 
         // Wait for confirmation before sending next
         const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-        
+
         if (confirmation.value.err) {
           throw new Error(`Transaction ${i + 1} failed on-chain`);
         }
@@ -140,10 +185,10 @@ export function FundingPanel() {
   const handleMockFund = async () => {
     setIsFunding(true);
     setFundingStatus('idle');
-    
+
     // Simulate delay
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // Mark all wallets as funded with fake balances
     const amountPerWallet = (totalRequired / burnerWallets.length) * 1e9; // Convert to lamports
     burnerWallets.forEach((_, index) => {
@@ -169,8 +214,8 @@ export function FundingPanel() {
             <div>
               <CardTitle>Fund Wallets</CardTitle>
               <CardDescription>
-                {config.isMockMode 
-                  ? '🧪 Test Mode - Simulated funding' 
+                {config.isMockMode
+                  ? '🧪 Test Mode - Simulated funding'
                   : 'Distribute SOL to your burner wallets'}
               </CardDescription>
             </div>
@@ -326,9 +371,11 @@ export function FundingPanel() {
             {isFunding ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {fundingProgress.total > 1 
-                  ? `Funding... (${fundingProgress.current}/${fundingProgress.total} txns)`
-                  : 'Funding Wallets...'}
+                {fundingStatus === 'shielding'
+                  ? `Shielding via ${getProviderDisplayName(privacyMethod)}...`
+                  : fundingProgress.total > 1
+                    ? `Distributing... (${fundingProgress.current}/${fundingProgress.total} txns)`
+                    : 'Distributing to Wallets...'}
               </>
             ) : allFunded ? (
               <>
@@ -337,7 +384,8 @@ export function FundingPanel() {
               </>
             ) : (
               <>
-                Fund {burnerWallets.length} Wallets
+                {usePrivacy && <Shield className="w-4 h-4 mr-2" />}
+                {usePrivacy ? 'Shield & Fund' : 'Fund'} {burnerWallets.length} Wallets
                 {burnerWallets.length > 20 && (
                   <span className="text-xs opacity-70 ml-1">
                     ({Math.ceil(burnerWallets.length / 20)} txns)

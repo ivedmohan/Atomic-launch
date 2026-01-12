@@ -163,7 +163,7 @@ export default function Home() {
             {activeTab === 'funding' && (
               <>
                 <div className="space-y-6">
-                  <FundingPanel />
+                  <FundingPanel privacyMethod={privacyMethod} />
 
                   {/* Privacy Selection */}
                   <div className="bg-[#12121f] rounded-2xl p-6 border border-[#1f1f35]">
