@@ -8,6 +8,16 @@ import {
   LAMPORTS_PER_SOL,
   ComputeBudgetProgram,
 } from '@solana/web3.js';
+import {
+  checkRateLimit,
+  getClientIdentifier,
+  createRateLimitResponse,
+  RATE_LIMITS,
+} from '@/lib/rateLimit';
+import {
+  validatePublicKey,
+  createValidationErrorResponse,
+} from '@/lib/validation';
 
 const RPC_URL = process.env.RPC_URL || 'https://api.mainnet-beta.solana.com';
 
@@ -27,26 +37,34 @@ interface ReclaimRequest {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  
+
   try {
+    // Rate limiting
+    const clientId = getClientIdentifier(request);
+    const rateLimitResult = checkRateLimit(`reclaim:${clientId}`, RATE_LIMITS.reclaim);
+
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(rateLimitResult.resetIn);
+    }
+
     const body: ReclaimRequest = await request.json();
     const { destinationWallet, wallets } = body;
 
-    if (!destinationWallet) {
-      return NextResponse.json(
-        { success: false, error: 'Destination wallet is required' },
-        { status: 400 }
-      );
+    // Validate destination wallet
+    const destResult = validatePublicKey(destinationWallet);
+    if (!destResult.valid) {
+      return createValidationErrorResponse(`Destination: ${destResult.error}`);
     }
 
     if (!wallets || wallets.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No wallets to reclaim from' },
-        { status: 400 }
-      );
+      return createValidationErrorResponse('No wallets to reclaim from');
     }
 
-    const destination = new PublicKey(destinationWallet);
+    if (wallets.length > 100) {
+      return createValidationErrorResponse('Maximum 100 wallets per reclaim');
+    }
+
+    const destination = new PublicKey(destResult.sanitized as string);
     const connection = new Connection(RPC_URL, 'confirmed');
 
     // Get fresh blockhash
@@ -60,17 +78,17 @@ export async function POST(request: NextRequest) {
 
     // Step 2: Build transactions only for wallets with sufficient balance
     const txsToSend: { keypair: Keypair; transaction: Transaction; balance: number }[] = [];
-    
+
     for (let i = 0; i < keypairs.length; i++) {
       const balance = balances[i];
       if (balance > TX_FEE_BUFFER) {
         const reclaimAmount = balance - TX_FEE_BUFFER;
-        
+
         const transaction = new Transaction({
           recentBlockhash: blockhash,
           feePayer: keypairs[i].publicKey,
         });
-        
+
         // Low compute budget for simple transfer
         transaction.add(
           ComputeBudgetProgram.setComputeUnitLimit({ units: 5000 }),
@@ -81,7 +99,7 @@ export async function POST(request: NextRequest) {
             lamports: reclaimAmount,
           })
         );
-        
+
         transaction.sign(keypairs[i]);
         txsToSend.push({ keypair: keypairs[i], transaction, balance: reclaimAmount });
       }
@@ -97,13 +115,13 @@ export async function POST(request: NextRequest) {
       signature?: string;
       error?: string;
     }[] = [];
-    
+
     let totalReclaimed = 0;
     let successCount = 0;
 
     for (let i = 0; i < txsToSend.length; i += BATCH_SIZE) {
       const batch = txsToSend.slice(i, i + BATCH_SIZE);
-      
+
       const batchPromises = batch.map(async ({ keypair, transaction, balance }) => {
         try {
           const signature = await connection.sendRawTransaction(
@@ -113,7 +131,7 @@ export async function POST(request: NextRequest) {
               preflightCommitment: 'confirmed',
             }
           );
-          
+
           return {
             wallet: keypair.publicKey.toBase58(),
             success: true,
@@ -130,7 +148,7 @@ export async function POST(request: NextRequest) {
       });
 
       const batchResults = await Promise.all(batchPromises);
-      
+
       for (const result of batchResults) {
         results.push(result);
         if (result.success && result.amount) {
@@ -138,8 +156,8 @@ export async function POST(request: NextRequest) {
           successCount++;
         }
       }
-      
-      console.log(`Batch ${Math.floor(i/BATCH_SIZE) + 1}: ${batchResults.filter(r => r.success).length}/${batch.length} sent`);
+
+      console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchResults.filter(r => r.success).length}/${batch.length} sent`);
     }
 
     // Add results for skipped wallets (zero balance)
@@ -170,8 +188,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Reclaim API error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }

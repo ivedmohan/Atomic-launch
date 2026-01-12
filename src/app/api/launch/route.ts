@@ -10,11 +10,25 @@ import {
   ComputeBudgetProgram,
 } from '@solana/web3.js';
 import bs58 from 'bs58';
-import { 
-  PLATFORM_FEE_SOL, 
+import {
+  PLATFORM_FEE_SOL,
   JITO_TIP_ACCOUNTS,
   TokenConfig,
 } from '@/types';
+import {
+  checkRateLimit,
+  getClientIdentifier,
+  createRateLimitResponse,
+  RATE_LIMITS,
+} from '@/lib/rateLimit';
+import {
+  validateTokenName,
+  validateTokenSymbol,
+  validateSolAmount,
+  validateSlippage,
+  validateWalletCount,
+  createValidationErrorResponse,
+} from '@/lib/validation';
 
 // ============================================================================
 // CONFIGURATION
@@ -115,14 +129,14 @@ function buildCreateInstruction(
   tokenConfig: TokenConfig
 ): TransactionInstruction {
   // Metadata URI
-  const metadataUri = tokenConfig.imageUrl.startsWith('http') 
+  const metadataUri = tokenConfig.imageUrl.startsWith('http')
     ? `https://pump.fun/api/ipfs?name=${encodeURIComponent(tokenConfig.name)}&symbol=${encodeURIComponent(tokenConfig.symbol)}&description=${encodeURIComponent(tokenConfig.description || '')}&image=${encodeURIComponent(tokenConfig.imageUrl)}`
     : tokenConfig.imageUrl;
 
   const nameBuffer = Buffer.from(tokenConfig.name);
   const symbolBuffer = Buffer.from(tokenConfig.symbol);
   const uriBuffer = Buffer.from(metadataUri);
-  
+
   const createData = Buffer.concat([
     CREATE_DISCRIMINATOR,
     Buffer.from([nameBuffer.length, 0, 0, 0]), nameBuffer,
@@ -161,7 +175,7 @@ function buildBuyInstruction(
   walletIndex: number
 ): TransactionInstruction {
   const buyerTokenAccount = getAssociatedTokenAddress(mint, buyer);
-  
+
   // Dynamic slippage based on position
   const dynamicSlippage = slippagePercent + (walletIndex * 0.3);
   const slippageBps = Math.floor(dynamicSlippage * 100);
@@ -210,12 +224,12 @@ interface BuildAtomicBundleParams {
 
 function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransaction[] {
   const { tokenConfig, keypairs, mintKeypair, totalBuyAmount, slippagePercent, blockhash } = params;
-  
+
   const mint = mintKeypair.publicKey;
   const bondingCurve = deriveBondingCurve(mint);
   const associatedBondingCurve = deriveAssociatedBondingCurve(mint, bondingCurve);
   const metadataAccount = deriveMetadataAccount(mint);
-  
+
   const buyLamportsPerWallet = solToLamports(totalBuyAmount / keypairs.length);
   const bundleTransactions: VersionedTransaction[] = [];
 
@@ -228,12 +242,12 @@ function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransactio
   {
     const firstBatchWallets = keypairs.slice(0, FIRST_TX_BUYER_SLOTS);
     const creator = keypairs[0]; // Dev wallet is the creator
-    
+
     const instructions: TransactionInstruction[] = [
       // Set high compute limit for create + multiple buys
       ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500_000 }),
-      
+
       // Create token instruction
       buildCreateInstruction(
         creator.publicKey,
@@ -243,7 +257,7 @@ function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransactio
         metadataAccount,
         tokenConfig
       ),
-      
+
       // Platform fee (from creator)
       SystemProgram.transfer({
         fromPubkey: creator.publicKey,
@@ -277,7 +291,7 @@ function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransactio
     // Sign with creator (payer), mintKeypair (new token), and all buyers in batch
     tx.sign([creator, mintKeypair, ...firstBatchWallets]);
     bundleTransactions.push(tx);
-    
+
     console.log(`TX 1: Create + ${firstBatchWallets.length} buys (signers: ${firstBatchWallets.length + 2})`);
   }
 
@@ -286,15 +300,15 @@ function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransactio
   // ========================================================================
   let walletIndex = FIRST_TX_BUYER_SLOTS;
   let txNumber = 2;
-  
+
   while (walletIndex < keypairs.length - MAX_BUYS_PER_TX) {
     const batchEnd = Math.min(walletIndex + MAX_BUYS_PER_TX, keypairs.length);
     const batchWallets = keypairs.slice(walletIndex, batchEnd);
-    
+
     if (batchWallets.length === 0) break;
-    
+
     const payer = batchWallets[0]; // First wallet in batch pays gas
-    
+
     const instructions: TransactionInstruction[] = [
       ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 300_000 }),
@@ -324,12 +338,12 @@ function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransactio
     const tx = new VersionedTransaction(message);
     tx.sign(batchWallets); // All wallets in batch must sign
     bundleTransactions.push(tx);
-    
+
     console.log(`TX ${txNumber}: ${batchWallets.length} buys (wallets ${walletIndex + 1}-${batchEnd})`);
-    
+
     walletIndex = batchEnd;
     txNumber++;
-    
+
     // Safety: Don't exceed Jito's 5 transaction limit
     if (bundleTransactions.length >= 4) break;
   }
@@ -339,10 +353,10 @@ function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransactio
   // ========================================================================
   {
     const finalWallets = keypairs.slice(walletIndex);
-    
+
     if (finalWallets.length > 0) {
       const payer = finalWallets[0];
-      
+
       const instructions: TransactionInstruction[] = [
         ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
         ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 300_000 }),
@@ -381,7 +395,7 @@ function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransactio
       const tx = new VersionedTransaction(message);
       tx.sign(finalWallets);
       bundleTransactions.push(tx);
-      
+
       console.log(`TX ${txNumber}: ${finalWallets.length} buys + Jito tip (final)`);
     }
   }
@@ -394,17 +408,17 @@ function buildAtomicBundle(params: BuildAtomicBundleParams): VersionedTransactio
 // JITO BUNDLE SUBMISSION
 // ============================================================================
 
-async function submitJitoBundle(transactions: VersionedTransaction[]): Promise<{ 
-  success: boolean; 
-  bundleId?: string; 
-  error?: string 
+async function submitJitoBundle(transactions: VersionedTransaction[]): Promise<{
+  success: boolean;
+  bundleId?: string;
+  error?: string
 }> {
   try {
     const serializedTxs = transactions.map(tx => bs58.encode(tx.serialize()));
-    
+
     console.log(`\nSubmitting ${serializedTxs.length} transactions to Jito...`);
     console.log(`Jito endpoint: ${JITO_BLOCK_ENGINE_URL}`);
-    
+
     const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -417,12 +431,12 @@ async function submitJitoBundle(transactions: VersionedTransaction[]): Promise<{
     });
 
     const result = await response.json();
-    
+
     if (result.error) {
       console.error('Jito error:', result.error);
       return { success: false, error: result.error.message || JSON.stringify(result.error) };
     }
-    
+
     console.log('Jito bundle accepted! Bundle ID:', result.result);
     return { success: true, bundleId: result.result };
   } catch (err) {
@@ -442,24 +456,24 @@ async function submitFallback(
   lastValidBlockHeight: number
 ): Promise<{ createSig: string | null; buyResults: { success: boolean; sig?: string; error?: string }[] }> {
   console.log('\n⚠️ FALLBACK MODE: Submitting transactions sequentially (NOT atomic!)');
-  
+
   // Step 1: Send and confirm CREATE transaction
   const createTx = transactions[0];
   let createSig: string | null = null;
-  
+
   try {
     createSig = await connection.sendRawTransaction(createTx.serialize(), {
       skipPreflight: false,
       preflightCommitment: 'confirmed',
     });
     console.log('Create TX sent:', createSig);
-    
+
     const confirmation = await connection.confirmTransaction({
       signature: createSig,
       blockhash,
       lastValidBlockHeight,
     }, 'confirmed');
-    
+
     if (confirmation.value.err) {
       throw new Error(`Create failed: ${JSON.stringify(confirmation.value.err)}`);
     }
@@ -501,12 +515,75 @@ interface LaunchRequest {
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  
+
   try {
-    const body: LaunchRequest = await request.json();
+    // ========================================================================
+    // RATE LIMITING
+    // ========================================================================
+    const clientId = getClientIdentifier(request);
+    const rateLimitResult = checkRateLimit(`launch:${clientId}`, RATE_LIMITS.launch);
+    
+    if (!rateLimitResult.allowed) {
+      console.log(`Rate limited: ${clientId}`);
+      return createRateLimitResponse(rateLimitResult.resetIn);
+    }
+
+    // ========================================================================
+    // INPUT VALIDATION
+    // ========================================================================
+    const body = await request.json();
     const { tokenConfig, wallets, totalBuyAmount = 5, slippagePercent = 15 } = body;
 
-    // Check network
+    // Validate token name
+    const nameResult = validateTokenName(tokenConfig?.name);
+    if (!nameResult.valid) {
+      return createValidationErrorResponse(nameResult.error!);
+    }
+
+    // Validate token symbol
+    const symbolResult = validateTokenSymbol(tokenConfig?.symbol);
+    if (!symbolResult.valid) {
+      return createValidationErrorResponse(symbolResult.error!);
+    }
+
+    // Validate buy amount (min 0.1 SOL, max 100 SOL)
+    const amountResult = validateSolAmount(totalBuyAmount, 0.1, 100);
+    if (!amountResult.valid) {
+      return createValidationErrorResponse(amountResult.error!);
+    }
+    const validatedBuyAmount = amountResult.sanitized as number;
+
+    // Validate slippage
+    const slippageResult = validateSlippage(slippagePercent, 0.5, 50);
+    if (!slippageResult.valid) {
+      return createValidationErrorResponse(slippageResult.error!);
+    }
+    const validatedSlippage = slippageResult.sanitized as number;
+
+    // Validate wallet count
+    const walletCountResult = validateWalletCount(wallets?.length, 1, MAX_ATOMIC_WALLETS);
+    if (!walletCountResult.valid) {
+      return createValidationErrorResponse(walletCountResult.error!);
+    }
+
+    // Validate each wallet has required fields
+    if (!Array.isArray(wallets)) {
+      return createValidationErrorResponse('Wallets must be an array');
+    }
+    
+    for (let i = 0; i < wallets.length; i++) {
+      const w = wallets[i];
+      if (!w?.publicKey || !w?.secretKey) {
+        return createValidationErrorResponse(`Wallet ${i}: Missing publicKey or secretKey`);
+      }
+      if (!Array.isArray(w.secretKey) || w.secretKey.length !== 64) {
+        return createValidationErrorResponse(`Wallet ${i}: Invalid secretKey format`);
+      }
+    }
+
+    // ========================================================================
+    // NETWORK CHECK
+    // ========================================================================
     const isDevnet = RPC_URL.includes('devnet');
     if (isDevnet) {
       return NextResponse.json({
@@ -516,40 +593,19 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Validate input
-    if (!tokenConfig.name || !tokenConfig.symbol) {
-      return NextResponse.json(
-        { success: false, error: 'Token name and symbol are required' },
-        { status: 400 }
-      );
-    }
-
-    if (!wallets || wallets.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'At least one wallet is required' },
-        { status: 400 }
-      );
-    }
-
-    // Check wallet limit for atomic launch
-    if (wallets.length > MAX_ATOMIC_WALLETS) {
-      return NextResponse.json({
-        success: false,
-        error: `Atomic launch supports max ${MAX_ATOMIC_WALLETS} wallets per bundle. You have ${wallets.length}. Please reduce wallet count or use multiple launches.`,
-        maxWallets: MAX_ATOMIC_WALLETS,
-      }, { status: 400 });
-    }
-
     console.log(`\n${'='.repeat(70)}`);
-    console.log(`🚀 ATOMIC LAUNCH: ${tokenConfig.name} (${tokenConfig.symbol})`);
-    console.log(`   Wallets: ${wallets.length} | Buy Amount: ${totalBuyAmount} SOL | Slippage: ${slippagePercent}%`);
+    console.log(`🚀 ATOMIC LAUNCH: ${nameResult.sanitized} (${symbolResult.sanitized})`);
+    console.log(`   Wallets: ${wallets.length} | Buy Amount: ${validatedBuyAmount} SOL | Slippage: ${validatedSlippage}%`);
+    console.log(`   Client: ${clientId} | Rate limit remaining: ${rateLimitResult.remaining}`);
     console.log(`${'='.repeat(70)}`);
 
-    // Setup
-    const keypairs = wallets.map(w => Keypair.fromSecretKey(new Uint8Array(w.secretKey)));
+    // ========================================================================
+    // SETUP
+    // ========================================================================
+    const keypairs = wallets.map((w: { secretKey: number[] }) => Keypair.fromSecretKey(new Uint8Array(w.secretKey)));
     const mintKeypair = Keypair.generate();
     const mint = mintKeypair.publicKey;
-    
+
     const connection = new Connection(RPC_URL, 'confirmed');
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
 
@@ -565,7 +621,7 @@ export async function POST(request: NextRequest) {
 
     // Submit to Jito
     const jitoResult = await submitJitoBundle(bundleTransactions);
-    
+
     let response: Record<string, unknown>;
 
     if (jitoResult.success) {
@@ -590,7 +646,7 @@ export async function POST(request: NextRequest) {
       );
 
       const successfulBuys = fallbackResult.buyResults.filter(r => r.success).length;
-      
+
       response = {
         success: fallbackResult.createSig !== null,
         atomic: false,
@@ -619,8 +675,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Launch API error:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
