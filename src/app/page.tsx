@@ -8,12 +8,15 @@ import { LaunchPanel } from '@/components/LaunchPanel';
 import { Dashboard } from '@/components/Dashboard';
 import { ReclaimPanel } from '@/components/ReclaimPanel';
 import { DevnetFaucet } from '@/components/DevnetFaucet';
+import { PrivacySelector } from '@/components/PrivacySelector';
+import { PrivacyScore } from '@/components/PrivacyScore';
 import { useWalletStore } from '@/stores/walletStore';
 import { getConfig } from '@/lib/config';
-import { 
-  Rocket, 
-  Wallet, 
-  Coins, 
+import { PrivacyMethod } from '@/lib/privacy';
+import {
+  Rocket,
+  Wallet,
+  Coins,
   PieChart,
   ChevronRight,
   Zap,
@@ -26,6 +29,7 @@ type TabType = 'wallets' | 'funding' | 'launch' | 'dashboard';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>('wallets');
+  const [privacyMethod, setPrivacyMethod] = useState<PrivacyMethod>('none');
   const { burnerWallets, launchState } = useWalletStore();
 
   const allFunded = burnerWallets.length > 0 && burnerWallets.every(w => w.funded);
@@ -66,7 +70,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      
+
       <main className="flex-1">
         {/* Hero Section */}
         <section className="relative overflow-hidden border-b border-[#1f1f35]">
@@ -79,12 +83,12 @@ export default function Home() {
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
                 Launch Tokens <span className="text-[#00ff88]">Atomically</span>
-          </h1>
+              </h1>
               <p className="text-lg text-[#8888aa] mb-8 max-w-2xl mx-auto">
-                Deploy on Pump.fun and snipe with 20-50 wallets in a single block. 
+                Deploy on Pump.fun and snipe with 20-50 wallets in a single block.
                 Maximum holders, instant distribution, zero sandwich attacks.
               </p>
-              
+
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
                 <div className="p-4 rounded-xl bg-[#12121f] border border-[#1f1f35]">
@@ -115,7 +119,7 @@ export default function Home() {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               const isDisabled = tab.disabled;
-              
+
               return (
                 <button
                   key={tab.id}
@@ -123,9 +127,9 @@ export default function Home() {
                   disabled={isDisabled}
                   className={`
                     flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all duration-200
-                    ${isActive 
-                      ? 'bg-gradient-to-r from-[#00ff88]/20 to-[#00ff88]/10 text-white border border-[#00ff88]/30' 
-                      : isDisabled 
+                    ${isActive
+                      ? 'bg-gradient-to-r from-[#00ff88]/20 to-[#00ff88]/10 text-white border border-[#00ff88]/30'
+                      : isDisabled
                         ? 'text-[#4a4a6a] cursor-not-allowed'
                         : 'text-[#8888aa] hover:text-white hover:bg-[#1a1a2e]'
                     }
@@ -155,14 +159,41 @@ export default function Home() {
                 </div>
               </>
             )}
-            
+
             {activeTab === 'funding' && (
               <>
-                <FundingPanel />
                 <div className="space-y-6">
+                  <FundingPanel />
+
+                  {/* Privacy Selection */}
+                  <div className="bg-[#12121f] rounded-2xl p-6 border border-[#1f1f35]">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-purple-400" />
+                      Stealth Mode (Optional)
+                    </h3>
+                    <PrivacySelector
+                      selected={privacyMethod}
+                      onChange={setPrivacyMethod}
+                    />
+                    <p className="text-xs text-zinc-500 mt-3">
+                      Enable privacy to shield your identity as the token creator.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Privacy Score - only show if privacy enabled */}
+                  {privacyMethod !== 'none' && (
+                    <PrivacyScore
+                      privacyMethod={privacyMethod}
+                      walletCount={burnerWallets.length}
+                      estimatedDurationMs={burnerWallets.length * 60000}
+                    />
+                  )}
+
                   {/* Devnet Faucet - Only shows on devnet */}
                   <DevnetFaucet />
-                  
+
                   {/* Info Card */}
                   <div className="bg-[#12121f] rounded-2xl p-6 border border-[#1f1f35]">
                     <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -184,7 +215,7 @@ export default function Home() {
                       </li>
                     </ol>
                   </div>
-                  
+
                   {/* Warning */}
                   <div className="bg-[#ffaa00]/5 rounded-2xl p-6 border border-[#ffaa00]/20">
                     <h3 className="text-lg font-semibold text-[#ffaa00] mb-2 flex items-center gap-2">
@@ -192,14 +223,14 @@ export default function Home() {
                       Security Notice
                     </h3>
                     <p className="text-sm text-[#aa8844]">
-                      Never fund wallets with more SOL than you're willing to lose. 
+                      Never fund wallets with more SOL than you're willing to lose.
                       These are disposable wallets for launch operations only.
                     </p>
                   </div>
                 </div>
               </>
             )}
-            
+
             {activeTab === 'launch' && (
               <>
                 <LaunchPanel />
@@ -229,21 +260,21 @@ export default function Home() {
                       </li>
                     </ol>
                   </div>
-                  
+
                   {/* Fee Notice */}
                   <div className="bg-[#00ff88]/5 rounded-2xl p-6 border border-[#00ff88]/20">
                     <h3 className="text-lg font-semibold text-[#00ff88] mb-2">
                       Platform Fee: 0.5 SOL
                     </h3>
                     <p className="text-sm text-[#88aa88]">
-                      This fee is included in the atomic bundle. It ensures bundle integrity 
+                      This fee is included in the atomic bundle. It ensures bundle integrity
                       and funds continued development of this tool.
-          </p>
-        </div>
+                    </p>
+                  </div>
                 </div>
               </>
             )}
-            
+
             {activeTab === 'dashboard' && (
               <>
                 <Dashboard />
@@ -267,8 +298,8 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-6">
                 <a href="#" className="text-sm text-[#6666aa] hover:text-white transition-colors">
-            Documentation
-          </a>
+                  Documentation
+                </a>
                 <a href="#" className="text-sm text-[#6666aa] hover:text-white transition-colors">
                   Twitter
                 </a>
@@ -277,7 +308,7 @@ export default function Home() {
                 </a>
               </div>
             </div>
-        </div>
+          </div>
         </footer>
       </main>
     </div>
