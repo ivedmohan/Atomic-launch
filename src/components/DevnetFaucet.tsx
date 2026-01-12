@@ -6,10 +6,10 @@ import { Connection, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { getConfig } from '@/lib/config';
-import { 
-  Droplets, 
-  Loader2, 
-  CheckCircle2, 
+import {
+  Droplets,
+  Loader2,
+  CheckCircle2,
   AlertCircle,
   ExternalLink,
 } from 'lucide-react';
@@ -19,9 +19,9 @@ export function DevnetFaucet() {
   const [isRequesting, setIsRequesting] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
-  
+
   const config = getConfig();
-  
+
   // Only show on devnet
   if (!config.isDevnet) return null;
 
@@ -37,8 +37,8 @@ export function DevnetFaucet() {
     setMessage('');
 
     try {
-      const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-      
+      const connection = new Connection(config.rpcUrl, 'confirmed');
+
       // Request 2 SOL airdrop (max allowed)
       const signature = await connection.requestAirdrop(
         publicKey,
@@ -50,11 +50,11 @@ export function DevnetFaucet() {
 
       setStatus('success');
       setMessage(`Received 2 SOL! Tx: ${signature.slice(0, 20)}...`);
-      
+
     } catch (err) {
       console.error('Airdrop error:', err);
       setStatus('error');
-      
+
       // Handle rate limiting
       if (err instanceof Error && err.message.includes('429')) {
         setMessage('Rate limited! Try again in a minute or use the faucet link below.');
@@ -82,7 +82,7 @@ export function DevnetFaucet() {
 
       <CardContent className="space-y-4">
         <p className="text-sm text-[#8888aa]">
-          You're on <span className="text-[#4488ff] font-semibold">Devnet</span>. 
+          You're on <span className="text-[#4488ff] font-semibold">Devnet</span>.
           Get free SOL to test wallet funding and transactions.
         </p>
 

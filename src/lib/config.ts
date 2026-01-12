@@ -6,11 +6,13 @@ export type NetworkMode = 'mainnet' | 'devnet' | 'mock';
 // Set this to control the app behavior
 export const NETWORK_MODE: NetworkMode = (process.env.NEXT_PUBLIC_NETWORK_MODE as NetworkMode) || 'mock';
 
-// RPC Endpoints
+// RPC Endpoints - Use env vars to allow custom RPC (e.g., Helius)
+const DEVNET_RPC = process.env.NEXT_PUBLIC_RPC_URL || 'https://api.devnet.solana.com';
+
 export const RPC_ENDPOINTS = {
   mainnet: process.env.NEXT_PUBLIC_RPC_URL || 'https://api.mainnet-beta.solana.com',
-  devnet: 'https://api.devnet.solana.com',
-  mock: 'https://api.devnet.solana.com', // Use devnet for mock mode wallet operations
+  devnet: DEVNET_RPC,
+  mock: DEVNET_RPC,
 };
 
 // Jito Configuration
